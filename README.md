@@ -1,5 +1,7 @@
 # Directory Structure 
 
+
+```plaintext
 Directory structure:
 └── vigneshv1cky-mlp_homeworks/
     ├── Breathomics python folder/
@@ -148,3 +150,4 @@ Directory structure:
         ├── decoder_transformers_with_pytorch_and_lightning_v2.ipynb
         ├── document_summarization_with_text_clustering_and_topic_modeling.ipynb
         └── word2vec_song_recommendation.ipynb
+```
