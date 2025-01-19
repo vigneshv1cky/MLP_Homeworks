@@ -1,0 +1,129 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import cross_val_predict
+from sklearn.linear_model import SGDClassifier
+from sklearn.metrics import confusion_matrix, roc_curve, auc
+
+# Setting default figure parameters
+plt.rcParams.update(
+    {
+        "figure.figsize": (10, 5),
+        "font.size": 12,
+        "legend.fontsize": 10,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "axes.titlesize": 18,
+        "axes.labelsize": 16,
+    }
+)
+plt.style.use("dark_background")
+
+# Load dataset
+fname = "../hw3/dataset/baby_data_raw"
+baby_data_raw = pd.read_csv(fname)
+
+# Preprocessing
+fieldsKin = [col for col in baby_data_raw.columns if col.endswith(("_x", "_y", "_z"))]
+dt = 0.02
+
+baby_data_raw.columns.tolist()
+baby_data_raw.isna().sum()
+baby_data_raw["time"]
+
+for col in baby_data_raw.columns:
+    if col != "time":
+        plt.figure(figsize=(20, 10))
+        plt.plot(baby_data_raw["time"], baby_data_raw[col], label=col)
+        plt.title(f"Before Interpolation - {col}")
+        plt.xlabel("Time")
+        plt.ylabel("Values")
+        plt.legend(loc="upper right", fontsize="small", ncol=2)
+        plt.show()
+
+
+# Interpolate missing values
+baby_data_clean = baby_data_raw.interpolate(method="quadratic").ffill().bfill()
+
+for col in baby_data_raw.columns:
+    if col != "time":
+        plt.figure(figsize=(20, 10))
+        plt.plot(baby_data_raw["time"], baby_data_raw[col], label=col)
+        plt.title(f"Before Interpolation - {col}")
+        plt.xlabel("Time")
+        plt.ylabel("Values")
+        plt.legend(loc="upper right", fontsize="small", ncol=2)
+        plt.show()
+
+# Smooth data
+box_filter_kernel = np.ones(9) / 9
+for attrib in fieldsKin:
+    vals = baby_data_clean[attrib].values
+    pad_size = len(box_filter_kernel) // 2
+    vals = np.concatenate(
+        (np.full(pad_size, vals[0]), vals, np.full(pad_size, vals[-1]))
+    )
+    baby_data_clean[attrib] = np.convolve(vals, box_filter_kernel, mode="valid")
+
+# Compute derivatives
+for attrib in fieldsKin:
+    vals = baby_data_clean[attrib].values
+    deriv = np.append((vals[1:] - vals[:-1]) / dt, 0)
+    baby_data_clean["d_" + attrib] = deriv
+
+# Feature Selection
+fieldsKinVel = fieldsKin + ["d_" + f for f in fieldsKin]
+fieldsRobot = ["robot_vel_l", "robot_vel_r"]
+inputs_pos_vel = baby_data_clean[fieldsKinVel].values
+time = baby_data_clean[["time"]].values
+robot_vel = baby_data_clean[fieldsRobot].values
+
+# Define Labels
+labels_linear = robot_vel[:, 0] < -0.0025
+labels_rotational = robot_vel[:, 1] < -0.02
+
+
+# Plotting Functions
+def visualize_model_output_timeseries(
+    y, preds, scores, threshold=0, offsets=(0, -2, -8)
+):
+    plt.figure()
+    plt.plot(y, label="True Class", color="g", alpha=0.6)
+    plt.plot(preds + offsets[1], label="Predicted Class (Offset)", color="b", alpha=0.6)
+    plt.plot(scores + offsets[2], label="Scores (Offset)", color="r", alpha=0.6)
+    plt.axhline(
+        threshold + offsets[2],
+        color="k",
+        linestyle="--",
+        label=f"Threshold = {threshold}",
+    )
+    plt.xlabel("Time (s)")
+    plt.legend()
+    plt.title("Model Output Time Series")
+    plt.show()
+
+
+# Classifier for Linear Velocity
+clf_linear = SGDClassifier(loss="log_loss", random_state=42, max_iter=10000, tol=1e-3)
+scores_linear = cross_val_predict(
+    clf_linear, inputs_pos_vel, labels_linear, cv=30, method="decision_function"
+)
+preds_linear = cross_val_predict(
+    clf_linear, inputs_pos_vel, labels_linear, cv=30, method="predict"
+)
+visualize_model_output_timeseries(labels_linear, preds_linear, scores_linear)
+
+# Classifier for Rotational Velocity
+clf_rotational = SGDClassifier(
+    loss="log_loss", random_state=42, max_iter=10000, tol=1e-3
+)
+scores_rotational = cross_val_predict(
+    clf_rotational, inputs_pos_vel, labels_rotational, cv=30, method="decision_function"
+)
+preds_rotational = cross_val_predict(
+    clf_rotational, inputs_pos_vel, labels_rotational, cv=30, method="predict"
+)
+visualize_model_output_timeseries(
+    labels_rotational, preds_rotational, scores_rotational
+)
