@@ -135,13 +135,13 @@ def perform_experiment(
     print(f"Testing Accuracy: {test_accuracy:.4f}")
 
     # Export and visualize the decision tree
-    export_graphviz(
-        model,
-        out_file=out_file,
-        feature_names=feature_names,
-        class_names=class_names,
-        filled=True,
-    )
+    # export_graphviz(
+    #     model,
+    #     out_file=out_file,
+    #     feature_names=feature_names,
+    #     class_names=class_names,
+    #     filled=True,
+    # )
     plt.figure(figsize=(20, 10))
     plot_tree(model, feature_names=feature_names, class_names=class_names, filled=True)
     plt.show()
