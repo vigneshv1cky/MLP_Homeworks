@@ -1,13 +1,32 @@
-import pandas as pd
+# Essential Libraries
 import numpy as np
-from sklearn.preprocessing import PowerTransformer
-from sklearn.impute import KNNImputer
+import pandas as pd
+
+# Preprocessing Libraries
+from sklearn.preprocessing import PowerTransformer, StandardScaler, FunctionTransformer
+from sklearn.impute import KNNImputer, SimpleImputer
+from scipy.stats import mode
+
+# Visualization Libraries
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import FunctionTransformer
-from scipy.stats import mode
+# Machine Learning Libraries
+from sklearn.model_selection import cross_val_score, GridSearchCV, train_test_split
+from sklearn.linear_model import LogisticRegression, LassoCV
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import roc_auc_score, log_loss
+from sklearn.pipeline import Pipeline
+from sklearn.feature_selection import SelectFromModel
+from sklearn.neural_network import MLPClassifier
+from sklearn.base import BaseEstimator, ClassifierMixin
+
+# Specialized ML Libraries
+from xgboost import XGBClassifier
+from sklearn.utils import parallel_backend
+from sklearn import metrics
+
+plt.style.use("ggplot")
 
 # #################################################
 # Loading and Preparing the Train Dataset
@@ -18,10 +37,10 @@ file_path = "/Users/vignesh/RStudio/IDA_Homework/IDA_HW_7/2024-dsa-ise-ida-class
 train = pd.read_csv(file_path)
 
 # View data structure
-print(train.info())
+train.info()
 
 # Check for missing values
-print(train.isnull().sum())
+train.isnull().sum()
 
 # Check for duplicate rows
 duplicates = train[train.duplicated()]
@@ -31,17 +50,19 @@ print(f"Number of duplicate rows: {len(duplicates)}")
 # Converting Selected Variables to Object Type
 # #################################################
 
+
 # Convert specified columns to object (string) type
-cols_to_convert = [
+cols_to_convert_to_string = [
     "admission_type",
     "discharge_disposition",
     "admission_source",
     "readmitted",
-    "patientID",
 ]
-train[cols_to_convert] = train[cols_to_convert].astype(str)
+train[cols_to_convert_to_string] = (
+    train[cols_to_convert_to_string].fillna("").astype(str)
+)
 
-print(train.info())
+train.info()
 
 # #################################################
 # Selecting Numeric Data and Computing Summary Statistics
@@ -53,16 +74,175 @@ train_numeric = train.select_dtypes(include=[np.number])
 
 # Function to compute summary statistics
 def numeric_summary(df):
-    summary = df.describe().T
-    summary["missing"] = df.isnull().sum()
+    if len(df) == 0:
+        raise ValueError("Input DataFrame is empty.")
+
+    summary = pd.DataFrame()
+    summary["missing"] = df.isna().sum()
     summary["missing_pct"] = (summary["missing"] / len(df)) * 100
     summary["unique"] = df.nunique()
     summary["unique_pct"] = (summary["unique"] / len(df)) * 100
+    descriptive_stats = df.describe().T
+    summary = pd.concat([summary, descriptive_stats], axis=1)
     return summary
 
 
 numeric_summary_df = numeric_summary(train_numeric)
-print(numeric_summary_df)
+numeric_summary_df
+
+
+# #################################################
+# Plotting Histograms of Numeric Variables
+# #################################################
+
+
+# Plot Histograms
+def plot_histogram(data, column_name):
+    plt.figure(figsize=(6, 6))
+    sns.histplot(data[column_name], kde=True, bins=30)
+    plt.title(f"Histogram of {column_name}")
+    plt.xlabel(column_name)
+    plt.ylabel("Frequency")
+    plt.show()
+
+
+for col in train_numeric.columns:
+    plot_histogram(train_numeric, col)
+
+
+# Plot Boxplots of all variable
+def plot_multiple_boxplots(data):
+    # Convert the DataFrame to long format if needed
+    data_long = data.melt(var_name="Variable", value_name="Value")
+    plt.figure(figsize=(6, 6))
+    sns.boxplot(x="Variable", y="Value", data=data_long)
+    plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+    plt.title("Boxplots of Multiple Variables")
+    plt.xlabel("Variable")
+    plt.ylabel("Value")
+    plt.tight_layout()
+    plt.show()
+
+
+plot_multiple_boxplots(train_numeric)
+
+
+# Plot Boxplots
+def plot_individual_boxplots(data):
+    for column in data.columns:
+        plt.figure(figsize=(6, 6))
+        sns.boxplot(y=data[column])
+        plt.title(f"Boxplot of {column}")
+        plt.ylabel(column)
+        plt.show()
+
+
+# Call the function
+plot_individual_boxplots(train_numeric)
+
+
+# Plot histograms and Boxplots usig subplots
+def plot_combined_histogram_boxplot(data):
+    for column in data.columns:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+        # Histogram
+        sns.histplot(data[column], kde=True, bins=30, ax=axes[0])
+        axes[0].set_title(f"Histogram of {column}")
+        axes[0].set_xlabel(column)
+        axes[0].set_ylabel("Frequency")
+
+        # Boxplot
+        sns.boxplot(y=data[column], ax=axes[1])
+        axes[1].set_title(f"Boxplot of {column}")
+        axes[1].set_ylabel(column)
+
+        plt.tight_layout()
+        plt.show()
+
+
+# Call the function
+plot_combined_histogram_boxplot(train_numeric)
+
+# #################################################
+# Outlier Detection and Removal
+# #################################################
+
+
+# Remove Outlier using IQR
+def remove_outliers_iqr_columnwise(data, multiplier=1.5):
+    filtered_data = data.copy()
+    for column in data.select_dtypes(
+        include=["number"]
+    ).columns:  # Apply only to numeric columns
+        Q1 = data[column].quantile(0.25)
+        Q3 = data[column].quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - (multiplier * IQR)
+        upper_bound = Q3 + (multiplier * IQR)
+        # Keep only values within bounds for this column
+        filtered_data = filtered_data[
+            (filtered_data[column] >= lower_bound)
+            & (filtered_data[column] <= upper_bound)
+        ]
+    return filtered_data
+
+
+def set_outliers_to_nan_iqr(data, multiplier=1.5):
+    filtered_data = data.copy()
+    for column in data.select_dtypes(
+        include=["number"]
+    ).columns:  # Apply only to numeric columns
+        Q1 = data[column].quantile(0.25)
+        Q3 = data[column].quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - (multiplier * IQR)
+        upper_bound = Q3 + (multiplier * IQR)
+        # Set outliers to NaN
+        filtered_data.loc[
+            (data[column] < lower_bound) | (data[column] > upper_bound), column
+        ] = np.nan
+    return filtered_data
+
+
+cleaned_data = set_outliers_to_nan_iqr(train_numeric)
+
+
+def plot_combined_histogram_boxplot(data):
+    for column in data.columns:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+        # Histogram
+        sns.histplot(data[column], kde=True, bins=30, ax=axes[0])
+        axes[0].set_title(f"Histogram of {column}")
+        axes[0].set_xlabel(column)
+        axes[0].set_ylabel("Frequency")
+
+        # Boxplot
+        sns.boxplot(y=data[column], ax=axes[1])
+        axes[1].set_title(f"Boxplot of {column}")
+        axes[1].set_ylabel(column)
+
+        plt.tight_layout()
+        plt.show()
+
+
+plot_combined_histogram_boxplot(cleaned_data)
+
+cleaned_data.columns
+cleaned_data.drop(
+    columns=[
+        "patientID",
+        "number_inpatient",
+        "number_emergency",
+        "number_outpatient",
+    ],
+    inplace=True,
+)
+
+numeric_summary(cleaned_data)
+
+plot_combined_histogram_boxplot(cleaned_data)
 
 # #################################################
 # Imputing Missing Values using KNN Imputation
@@ -70,36 +250,20 @@ print(numeric_summary_df)
 
 imputer = KNNImputer(n_neighbors=5)
 train_numeric_imputed = pd.DataFrame(
-    imputer.fit_transform(train_numeric), columns=train_numeric.columns
+    imputer.fit_transform(cleaned_data), columns=cleaned_data.columns
 )
 
 # Recompute summary statistics after imputation
-numeric_summary_df = numeric_summary(train_numeric_imputed)
-print(numeric_summary_df)
-
-# #################################################
-# Plotting Histograms of Numeric Variables
-# #################################################
+numeric_summary(train_numeric_imputed)
 
 
-def plot_histogram(data, column_name):
-    plt.figure(figsize=(8, 6))
-    sns.histplot(data[column_name], kde=False, bins=30, color="blue")
-    plt.title(f"Histogram of {column_name}")
-    plt.xlabel(column_name)
-    plt.ylabel("Frequency")
-    plt.show()
-
-
-for col in train_numeric_imputed.columns:
-    plot_histogram(train_numeric_imputed, col)
+plot_combined_histogram_boxplot(train_numeric_imputed)
 
 # #################################################
 # Handling Skewness Using Box-Cox Transformation
 # #################################################
 
 
-# Compute skewness
 def compute_skewness(df):
     return df.apply(lambda x: x.skew()).sort_values()
 
@@ -107,6 +271,10 @@ def compute_skewness(df):
 skewness_values = compute_skewness(train_numeric_imputed)
 print("Skewness of variables:")
 print(skewness_values)
+
+# #################################################
+# Numeric Transformation and Summary
+# #################################################
 
 # Apply Box-Cox transformation (requires positive data, so shift by 1 if necessary)
 power_transformer = PowerTransformer(method="yeo-johnson", standardize=False)
@@ -120,49 +288,12 @@ transformed_skewness = compute_skewness(train_numeric_transformed)
 print("Skewness after transformation:")
 print(transformed_skewness)
 
-# #################################################
-# Updating the Original Dataset
-# #################################################
-
-# Replace numeric columns with transformed data
-train.update(train_numeric_transformed)
-print(train.head())
+plot_combined_histogram_boxplot(train_numeric_transformed)
 
 
 # #################################################
 # FACTORS
 # #################################################
-
-
-# Function to compute mode for Factor data
-def get_modes(series, type_=1):
-    counts = series.value_counts()
-    if type_ == 1:
-        return counts.idxmax()  # Most common
-    elif type_ == 2:
-        if len(counts) < 2:
-            return np.nan  # No 2nd mode if only one unique value
-        return counts.index[1]  # 2nd most common
-    elif type_ == -1:
-        return counts.idxmin()  # Least common
-    else:
-        raise ValueError("Invalid type selected")
-
-
-# Function to compute the count of mode for Factor data
-def get_modes_count(series, type_=1):
-    counts = series.value_counts()
-    if type_ == 1:
-        return counts.max()  # Most common frequency
-    elif type_ == 2:
-        if len(counts) < 2:
-            return np.nan  # No 2nd mode if only one unique value
-        return counts.iloc[1]  # 2nd most common frequency
-    elif type_ == -1:
-        return counts.min()  # Least common frequency
-    else:
-        raise ValueError("Invalid type selected")
-
 
 # #################################################
 # Selecting Factor Data, Computing Summary Statistics
@@ -170,34 +301,69 @@ def get_modes_count(series, type_=1):
 
 # Extract Factor Variables
 train_factor = train.select_dtypes(include=["object"]).copy()
+train_factor.info()
+train_factor.describe().T.drop(columns="unique")
+
+
+# Function to compute summary statistics
+def factor_summary_2(df):
+    summary = pd.DataFrame()
+    summary["missing"] = df.isnull().sum()
+    summary["missing_pct"] = (summary["missing"] / len(df)) * 100
+    summary["unique"] = df.nunique()
+    summary["unique_pct"] = (summary["unique"] / len(df)) * 100
+    descriptive_stats = df.describe().T.drop(columns="unique")
+    summary = pd.concat([summary, descriptive_stats], axis=1)
+    return summary
 
 
 # Compute Summary for Factor Data
 def factor_summary(df):
+    """
+    Computes a summary of factor data for each column in the DataFrame.
+    """
     summary = []
     for col in df.columns:
+        col_data = df[col]
+        value_counts = col_data.value_counts()
+        unique_count = len(value_counts)
+        total_count = len(col_data)
+        missing_count = col_data.isnull().sum()
+        unique_count = col_data.nunique()
+
+        # Calculate modes and their counts
+        most_common = value_counts.idxmax() if not value_counts.empty else np.nan
+        most_common_count = value_counts.max() if not value_counts.empty else np.nan
+        second_most_common = value_counts.index[1] if unique_count > 1 else np.nan
+        second_most_common_count = value_counts.iloc[1] if unique_count > 1 else np.nan
+        least_common = value_counts.idxmin() if not value_counts.empty else np.nan
+        least_common_count = value_counts.min() if not value_counts.empty else np.nan
+
         summary.append(
             {
                 "variable": col,
-                "n": len(df[col]),
-                "unique": df[col].nunique(),
-                "missing": df[col].isnull().sum(),
-                "most_common": get_modes(df[col], type_=1),
-                "most_common_count": get_modes_count(df[col], type_=1),
-                "2nd_most_common": get_modes(df[col], type_=2),
-                "2nd_most_common_count": get_modes_count(df[col], type_=2),
-                "least_common": get_modes(df[col], type_=-1),
-                "least_common_count": get_modes_count(df[col], type_=-1),
+                "n": len(col_data),
+                "missing": col_data.isnull().sum(),
+                "missing_percentage": (missing_count / total_count * 100)
+                if total_count > 0
+                else np.nan,
+                "unique": col_data.nunique(),
+                "unique_percentage": (unique_count / total_count * 100)
+                if total_count > 0
+                else np.nan,
+                "most_common": most_common,
+                "most_common_count": most_common_count,
+                "2nd_most_common": second_most_common,
+                "2nd_most_common_count": second_most_common_count,
+                "least_common": least_common,
+                "least_common_count": least_common_count,
             }
         )
     return pd.DataFrame(summary)
 
 
-factor_summary_df = factor_summary(train_factor)
-print(factor_summary_df)
+factor_summary(train_factor)
 
-train_factor.describe()
-train_factor.isna().sum()
 
 # #################################################
 # Plotting Factor Variables with Barplots
@@ -231,41 +397,51 @@ train_factor_imputed = pd.DataFrame(
 
 # Recompute Summary of Factor Data After Imputation
 factor_summary_df_imputed = factor_summary(train_factor_imputed)
-print(factor_summary_df_imputed)
+factor_summary_df_imputed
 
 # #################################################
 # Feature Selection of Factor Variables
 # #################################################
 
 # Select Specific Factor Features
-train_factor_selected = train_factor_imputed[
-    ["medical_specialty", "diagnosis", "readmitted"]
-]
-print(train_factor_selected.info())
+train_factor_selected = train_factor_imputed[["medical_specialty", "readmitted"]]
+train_factor_selected.info()
+factor_summary(train_factor_selected)
 
 # #################################################
 # Collapsing Factor Levels
 # #################################################
 
 
-def collapse_levels(series, top_n):
-    top_categories = series.value_counts().nlargest(top_n).index
-    return series.where(series.isin(top_categories), other="Other")
+def lump_top_n(series, n):
+    """
+    Groups all but the top `n` most frequent categories in a Pandas Series into an 'Other' category.
+
+    Parameters:
+        series (pd.Series): The series containing categorical data.
+        n (int): Number of top categories to retain.
+
+    Returns:
+        pd.Series: Modified series with the top `n` categories retained and others lumped into 'Other'.
+    """
+    value_counts = series.value_counts()
+    top_n_categories = value_counts.nlargest(n).index
+    return series.apply(lambda x: x if x in top_n_categories else "Other")
 
 
 train_factor_collapsed = train_factor_selected.copy()
-train_factor_collapsed["medical_specialty"] = collapse_levels(
-    train_factor_collapsed["medical_specialty"], top_n=19
+train_factor_collapsed["medical_specialty"] = lump_top_n(
+    train_factor_collapsed["medical_specialty"], n=19
 )
-train_factor_collapsed["diagnosis"] = collapse_levels(
-    train_factor_collapsed["diagnosis"], top_n=19
-)
-
-print(train_factor_collapsed.head())
 
 # #################################################
 # Plotting Proportions by `readmitted`
 # #################################################
+
+
+train_factor_collapsed.groupby(["medical_specialty", "readmitted"]).size().unstack(
+    fill_value=0
+).apply(lambda x: x / x.sum(), axis=1)
 
 
 def plot_proportion_by_factor(data, column_name, target_name):
@@ -275,7 +451,7 @@ def plot_proportion_by_factor(data, column_name, target_name):
         .unstack(fill_value=0)
         .apply(lambda x: x / x.sum(), axis=1)
     )
-    prop_df.plot(kind="bar", stacked=True, figsize=(10, 6), colormap="viridis")
+    prop_df.plot(kind="barh", stacked=True, figsize=(10, 6))
     plt.title(f"Proportion of {target_name} by {column_name}")
     plt.xlabel(column_name)
     plt.ylabel("Proportion")
@@ -284,42 +460,169 @@ def plot_proportion_by_factor(data, column_name, target_name):
     plt.show()
 
 
-for col in ["medical_specialty", "diagnosis"]:
+for col in ["medical_specialty"]:
     plot_proportion_by_factor(train_factor_collapsed, col, "readmitted")
 
 # #################################################
 # Merging Numeric and Factor Data
 # #################################################
 
-final_data = pd.concat([train_numeric, train_factor_collapsed], axis=1)
-final_data.drop(columns=["patientID"], inplace=True)
+final_data = pd.concat([train_numeric_transformed, train_factor_collapsed], axis=1)
 
 # Checking the Final Data
-print(final_data.info())
-print(final_data.isnull().sum())
+final_data.info()
+final_data.isnull().sum()
+final_data
+final_data.select_dtypes(include=["object"]).columns
 
-Final_Data = final_data.copy()
+print(final_data["medical_specialty"].nunique())
+print(final_data["medical_specialty"].value_counts())
+
+final_data = pd.get_dummies(final_data, columns=["medical_specialty"], drop_first=True)
+
+final_data["readmitted"].value_counts()
+final_data["readmitted"].value_counts(normalize=True)
+final_data["readmitted"] = final_data["readmitted"].astype(int)
+final_data["readmitted"].unique()
+
+
+"""
+# #################################################
+# UnderSampling
+# #################################################
+
+# Separate the two classes
+class_0 = final_data[final_data["readmitted"] == 0]
+class_1 = final_data[final_data["readmitted"] == 1]
+
+# Randomly undersample the majority class
+class_0_downsampled = class_0.sample(n=len(class_1), random_state=42)
+
+# Combine the two classes
+final_data_balanced = pd.concat([class_0_downsampled, class_1])
+
+# Shuffle the dataset
+final_data_balanced = final_data_balanced.sample(frac=1, random_state=42).reset_index(
+    drop=True
+)
+
+# #################################################
+# OverSampling
+# #################################################
+
+class_0 = final_data[final_data["readmitted"] == 0]
+class_1 = final_data[final_data["readmitted"] == 1]
+
+# Randomly oversample the minority class
+class_1_upsampled = class_1.sample(n=len(class_0), replace=True, random_state=42)
+
+# Combine the two classes
+final_data_balanced = pd.concat([class_0, class_1_upsampled])
+
+# Shuffle the dataset
+final_data_balanced = final_data_balanced.sample(frac=1, random_state=42).reset_index(
+    drop=True
+)
+"""
+
+
+# #################################################
+# Synthetic Oversampling
+# #################################################
+
+from imblearn.over_sampling import SMOTE
+from sklearn.model_selection import train_test_split
+
+# Separate features (X) and target (y)
+X = final_data.drop(columns=["readmitted"])
+y = final_data["readmitted"]
+
+X.info()
+
+# Apply SMOTE
+smote = SMOTE(random_state=42)
+X_smote, y_smote = smote.fit_resample(X, y)
+
+# Combine X and y into a new balanced dataset
+final_data_balanced_smote = pd.concat(
+    [
+        pd.DataFrame(X_smote, columns=X.columns),
+        pd.DataFrame(y_smote, columns=["readmitted"]),
+    ],
+    axis=1,
+)
+
+# Verify the balance
+print(final_data_balanced_smote["readmitted"].value_counts(normalize=True))
+
+
+Final_Data = final_data_balanced_smote.copy()
 
 # #################################################
 # Modelling
 # #################################################
 
 
-import numpy as np
-import pandas as pd
-from sklearn.model_selection import cross_val_score, GridSearchCV, train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import roc_auc_score, log_loss
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
-from sklearn.feature_selection import SelectFromModel
-from sklearn.neural_network import MLPClassifier
-from xgboost import XGBClassifier
-from sklearn.utils import parallel_backend
-from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.linear_model import LassoCV
-from sklearn import metrics
+# #################################################
+# Load and Preprocess Data
+# #################################################
+
+# Define target variable and features
+
+X = Final_Data.drop(columns=["readmitted"])
+y = Final_Data["readmitted"]
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+
+# Logistic Regression
+logreg_model = LogisticRegression(max_iter=1000, solver="liblinear", random_state=42)
+
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+roc_auc_scores = cross_val_score(logreg_model, X, y, cv=cv, scoring="roc_auc")
+roc_auc_scores.mean()
+
+logreg_model.fit(X_train, y_train)
+logreg_roc = roc_auc_score(y_test, logreg_model.predict_proba(X_test)[:, 1])
+
+# Variable Importance for Logistic Regression
+logreg_importance = np.abs(logreg_model.coef_[0])
+logreg_importance_features = pd.DataFrame(
+    {"Feature": X.columns, "Importance": logreg_importance}
+).sort_values(by="Importance", ascending=False)
+
+
+# Random Forest with Grid Search
+rf_param_grid = {
+    "n_estimators": [50, 100, 150],
+    "max_depth": [None, 10, 20],
+    "min_samples_split": [2, 5, 10],
+}
+rf_grid_search = GridSearchCV(
+    RandomForestClassifier(random_state=42), rf_param_grid, cv=5, scoring="roc_auc"
+)
+rf_grid_search.fit(X_train, y_train)
+rf_model = rf_grid_search.best_estimator_
+rf_roc = roc_auc_score(y_test, rf_model.predict_proba(X_test)[:, 1])
+
+# Variable Importance for Random Forest
+rf_importance = pd.DataFrame(
+    {"Feature": X.columns, "Importance": rf_model.feature_importances_}
+).sort_values(by="Importance", ascending=False)
+
+
+# #################################################
+
+
+# #################################################
+
+
+# #################################################
 
 # Load data (assuming Final_Data is a pandas DataFrame)
 # Replace this with actual data loading code
