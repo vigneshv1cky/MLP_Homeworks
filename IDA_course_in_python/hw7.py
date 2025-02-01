@@ -273,7 +273,7 @@ print("Skewness of variables:")
 print(skewness_values)
 
 # #################################################
-# Numeric Transformation and Summary
+# Numeric Transformation(Normalaization) and Skewness Summary
 # #################################################
 
 # Apply Box-Cox transformation (requires positive data, so shift by 1 if necessary)
@@ -290,6 +290,17 @@ print(transformed_skewness)
 
 plot_combined_histogram_boxplot(train_numeric_transformed)
 
+# #################################################
+# Numeric Scaling
+# #################################################
+
+scaler = StandardScaler()
+
+# Fit on transformed training data and scale it
+train_numeric_scaled = pd.DataFrame(
+    scaler.fit_transform(train_numeric_transformed),
+    columns=train_numeric_transformed.columns,
+)
 
 # #################################################
 # FACTORS
@@ -467,7 +478,7 @@ for col in ["medical_specialty"]:
 # Merging Numeric and Factor Data
 # #################################################
 
-final_data = pd.concat([train_numeric_transformed, train_factor_collapsed], axis=1)
+final_data = pd.concat([train_numeric_scaled, train_factor_collapsed], axis=1)
 
 # Checking the Final Data
 final_data.info()
