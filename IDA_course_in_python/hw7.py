@@ -278,7 +278,7 @@ print(skewness_values)
 
 # Apply Box-Cox transformation (requires positive data, so shift by 1 if necessary)
 power_transformer = PowerTransformer(method="yeo-johnson", standardize=False)
-transformed_data = power_transformer.fit_transform(train_numeric_imputed + 1)
+transformed_data = power_transformer.fit_transform(train_numeric_imputed)
 train_numeric_transformed = pd.DataFrame(
     transformed_data, columns=train_numeric_imputed.columns
 )
@@ -568,6 +568,42 @@ print(final_data_balanced_smote["readmitted"].value_counts(normalize=True))
 
 
 Final_Data = final_data_balanced_smote.copy()
+
+
+# #################################################
+# Pipelines
+# #################################################
+
+"""
+# Define numeric and categorical features
+numeric_features = X.select_dtypes(include=['float64', 'int64']).columns
+categorical_features = X.select_dtypes(include=['object']).columns
+
+# Preprocessing for numeric features
+numeric_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='median')),
+    ('scaler', StandardScaler())
+])
+
+# Preprocessing for categorical features
+categorical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='most_frequent')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))
+])
+
+# Combine preprocessing steps
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numeric_transformer, numeric_features),
+        ('cat', categorical_transformer, categorical_features)
+    ])
+
+# Create the full pipeline
+pipeline = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('classifier', RandomForestClassifier(random_state=42))
+])
+"""
 
 # #################################################
 # Modelling
