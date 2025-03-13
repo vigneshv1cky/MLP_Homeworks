@@ -93,8 +93,5 @@ target/
 # /models/
 
 # exclude data from source control by default
-/.idea
-/HW_10/Dataset/hw010_skel.pkl
-/hw5/dataset
-/hw6/Dataset
-/hw7/Dataset
+
+*.pkl

@@ -26,11 +26,11 @@ from xgboost import XGBClassifier
 from sklearn.utils import parallel_backend
 from sklearn import metrics
 
-plt.style.use("ggplot")
+plt.style.use("default")
 
-# #################################################
+# ====================================================
 # Loading and Preparing the Train Dataset
-# #################################################
+# ====================================================
 
 # Step 1: Load Data
 file_path = "/Users/vignesh/RStudio/IDA_Homework/IDA_HW_7/2024-dsa-ise-ida-classification-hw-7/hm7-Train-2024.csv"
@@ -46,9 +46,9 @@ train.isnull().sum()
 duplicates = train[train.duplicated()]
 print(f"Number of duplicate rows: {len(duplicates)}")
 
-# #################################################
+# ====================================================
 # Converting Selected Variables to Object Type
-# #################################################
+# ====================================================
 
 
 # Convert specified columns to object (string) type
@@ -64,9 +64,9 @@ train[cols_to_convert_to_string] = (
 
 train.info()
 
-# #################################################
+# ====================================================
 # Selecting Numeric Data and Computing Summary Statistics
-# #################################################
+# ====================================================
 
 # Select numeric data
 train_numeric = train.select_dtypes(include=[np.number])
@@ -91,14 +91,14 @@ numeric_summary_df = numeric_summary(train_numeric)
 numeric_summary_df
 
 
-# #################################################
+# ====================================================
 # Plotting Histograms of Numeric Variables
-# #################################################
+# ====================================================
 
 
 # Plot Histograms
 def plot_histogram(data, column_name):
-    plt.figure(figsize=(6, 6))
+    plt.figure(figsize=(10, 5))
     sns.histplot(data[column_name], kde=True, bins=30)
     plt.title(f"Histogram of {column_name}")
     plt.xlabel(column_name)
@@ -114,7 +114,7 @@ for col in train_numeric.columns:
 def plot_multiple_boxplots(data):
     # Convert the DataFrame to long format if needed
     data_long = data.melt(var_name="Variable", value_name="Value")
-    plt.figure(figsize=(6, 6))
+    plt.figure(figsize=(10, 5))
     sns.boxplot(x="Variable", y="Value", data=data_long)
     plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
     plt.title("Boxplots of Multiple Variables")
@@ -130,7 +130,7 @@ plot_multiple_boxplots(train_numeric)
 # Plot Boxplots
 def plot_individual_boxplots(data):
     for column in data.columns:
-        plt.figure(figsize=(6, 6))
+        plt.figure(figsize=(10, 5))
         sns.boxplot(y=data[column])
         plt.title(f"Boxplot of {column}")
         plt.ylabel(column)
@@ -164,9 +164,9 @@ def plot_combined_histogram_boxplot(data):
 # Call the function
 plot_combined_histogram_boxplot(train_numeric)
 
-# #################################################
+# ====================================================
 # Outlier Detection and Removal
-# #################################################
+# ====================================================
 
 
 # Remove Outlier using IQR
@@ -240,13 +240,15 @@ cleaned_data.drop(
     inplace=True,
 )
 
+cleaned_data.columns.to_list()
+
 numeric_summary(cleaned_data)
 
 plot_combined_histogram_boxplot(cleaned_data)
 
-# #################################################
+# ====================================================
 # Imputing Missing Values using KNN Imputation
-# #################################################
+# ====================================================
 
 imputer = KNNImputer(n_neighbors=5)
 train_numeric_imputed = pd.DataFrame(
@@ -259,9 +261,9 @@ numeric_summary(train_numeric_imputed)
 
 plot_combined_histogram_boxplot(train_numeric_imputed)
 
-# #################################################
+# ====================================================
 # Handling Skewness Using Box-Cox Transformation
-# #################################################
+# ====================================================
 
 
 def compute_skewness(df):
@@ -272,9 +274,9 @@ skewness_values = compute_skewness(train_numeric_imputed)
 print("Skewness of variables:")
 print(skewness_values)
 
-# #################################################
+# ====================================================
 # Numeric Transformation(Normalaization) and Skewness Summary
-# #################################################
+# ====================================================
 
 # Apply Box-Cox transformation (requires positive data, so shift by 1 if necessary)
 power_transformer = PowerTransformer(method="yeo-johnson", standardize=False)
@@ -290,9 +292,9 @@ print(transformed_skewness)
 
 plot_combined_histogram_boxplot(train_numeric_transformed)
 
-# #################################################
+# ====================================================
 # Numeric Scaling
-# #################################################
+# ====================================================
 
 scaler = StandardScaler()
 
@@ -302,13 +304,13 @@ train_numeric_scaled = pd.DataFrame(
     columns=train_numeric_transformed.columns,
 )
 
-# #################################################
+# ====================================================
 # FACTORS
-# #################################################
+# ====================================================
 
-# #################################################
+# ====================================================
 # Selecting Factor Data, Computing Summary Statistics
-# #################################################
+# ====================================================
 
 # Extract Factor Variables
 train_factor = train.select_dtypes(include=["object"]).copy()
@@ -376,9 +378,9 @@ def factor_summary(df):
 factor_summary(train_factor)
 
 
-# #################################################
+# ====================================================
 # Plotting Factor Variables with Barplots
-# #################################################
+# ====================================================
 
 
 def plot_barplot(data, column_name):
@@ -397,31 +399,56 @@ def plot_barplot(data, column_name):
 for col in train_factor.columns:
     plot_barplot(train_factor, col)
 
-# #################################################
-# Imputing Missing Factor Data
-# #################################################
 
+def plot_barplot_with_hue(data, column):
+    plt.figure(figsize=(20, 5))
+    sns.countplot(data=data, x=column, hue="readmitted")
+    plt.title(f"Distribution of {column} by Readmission Status", fontsize=16)
+    plt.xlabel(column, fontsize=14)
+    plt.ylabel("Count", fontsize=14)
+    plt.xticks(rotation=45, fontsize=14)
+    plt.yticks(fontsize=12)
+    plt.show()
+
+
+# Iterate over all factor variables and plot them against readmitted
+for col in train_factor.columns:
+    plot_barplot_with_hue(train_factor, col)
+
+train_factor
+
+# ====================================================
+# Imputing Missing Factor Data
+# ====================================================
+
+train_factor_no_target = train_factor.drop("readmitted", axis=1)
+
+# Create and apply the imputer on the remaining columns
 factor_imputer = SimpleImputer(strategy="most_frequent")
 train_factor_imputed = pd.DataFrame(
-    factor_imputer.fit_transform(train_factor), columns=train_factor.columns
+    factor_imputer.fit_transform(train_factor_no_target),
+    columns=train_factor_no_target.columns,
 )
+
+# Optionally, add back the target variable if needed
+train_factor_imputed["readmitted"] = train_factor["readmitted"]
 
 # Recompute Summary of Factor Data After Imputation
 factor_summary_df_imputed = factor_summary(train_factor_imputed)
 factor_summary_df_imputed
 
-# #################################################
+# ====================================================
 # Feature Selection of Factor Variables
-# #################################################
+# ====================================================
 
 # Select Specific Factor Features
 train_factor_selected = train_factor_imputed[["medical_specialty", "readmitted"]]
 train_factor_selected.info()
 factor_summary(train_factor_selected)
 
-# #################################################
+# ====================================================
 # Collapsing Factor Levels
-# #################################################
+# ====================================================
 
 
 def lump_top_n(series, n):
@@ -444,10 +471,11 @@ train_factor_collapsed = train_factor_selected.copy()
 train_factor_collapsed["medical_specialty"] = lump_top_n(
     train_factor_collapsed["medical_specialty"], n=19
 )
+train_factor_collapsed["medical_specialty"].value_counts()
 
-# #################################################
+# ====================================================
 # Plotting Proportions by `readmitted`
-# #################################################
+# ====================================================
 
 
 train_factor_collapsed.groupby(["medical_specialty", "readmitted"]).size().unstack(
@@ -474,9 +502,9 @@ def plot_proportion_by_factor(data, column_name, target_name):
 for col in ["medical_specialty"]:
     plot_proportion_by_factor(train_factor_collapsed, col, "readmitted")
 
-# #################################################
+# ====================================================
 # Merging Numeric and Factor Data
-# #################################################
+# ====================================================
 
 final_data = pd.concat([train_numeric_scaled, train_factor_collapsed], axis=1)
 
@@ -498,9 +526,9 @@ final_data["readmitted"].unique()
 
 
 """
-# #################################################
+# ====================================================
 # UnderSampling
-# #################################################
+# ====================================================
 
 # Separate the two classes
 class_0 = final_data[final_data["readmitted"] == 0]
@@ -517,9 +545,9 @@ final_data_balanced = final_data_balanced.sample(frac=1, random_state=42).reset_
     drop=True
 )
 
-# #################################################
+# ====================================================
 # OverSampling
-# #################################################
+# ====================================================
 
 class_0 = final_data[final_data["readmitted"] == 0]
 class_1 = final_data[final_data["readmitted"] == 1]
@@ -537,9 +565,9 @@ final_data_balanced = final_data_balanced.sample(frac=1, random_state=42).reset_
 """
 
 
-# #################################################
+# ====================================================
 # Synthetic Oversampling
-# #################################################
+# ====================================================
 
 from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split
@@ -568,11 +596,12 @@ print(final_data_balanced_smote["readmitted"].value_counts(normalize=True))
 
 
 Final_Data = final_data_balanced_smote.copy()
+Final_Data.columns.to_list()
 
 
-# #################################################
+# ====================================================
 # Pipelines
-# #################################################
+# ====================================================
 
 """
 # Define numeric and categorical features
@@ -605,208 +634,481 @@ pipeline = Pipeline(steps=[
 ])
 """
 
-# #################################################
+# ====================================================
 # Modelling
-# #################################################
-
-
-# #################################################
-# Load and Preprocess Data
-# #################################################
+# ====================================================
 
 # Define target variable and features
-
 X = Final_Data.drop(columns=["readmitted"])
 y = Final_Data["readmitted"]
 
-# Train-test split
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
-
-
+# ====================================================
 # Logistic Regression
-logreg_model = LogisticRegression(max_iter=1000, solver="liblinear", random_state=42)
+# ====================================================
 
-from sklearn.model_selection import cross_val_score, StratifiedKFold
-
-cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
-roc_auc_scores = cross_val_score(logreg_model, X, y, cv=cv, scoring="roc_auc")
-roc_auc_scores.mean()
-
-logreg_model.fit(X_train, y_train)
-logreg_roc = roc_auc_score(y_test, logreg_model.predict_proba(X_test)[:, 1])
-
-# Variable Importance for Logistic Regression
-logreg_importance = np.abs(logreg_model.coef_[0])
-logreg_importance_features = pd.DataFrame(
-    {"Feature": X.columns, "Importance": logreg_importance}
-).sort_values(by="Importance", ascending=False)
+from sklearn.metrics import (
+    confusion_matrix,
+    classification_report,
+    roc_curve,
+    roc_auc_score,
+)
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 
 
-# Random Forest with Grid Search
-rf_param_grid = {
-    "n_estimators": [50, 100, 150],
-    "max_depth": [None, 10, 20],
+model = LogisticRegression(max_iter=1000)
+model.fit(X, y)
+
+# Generate predictions and predicted probabilities
+y_pred = model.predict(X)
+y_pred_proba = model.predict_proba(X)[:, 1]
+
+# Print classification report and confusion matrix
+print("Classification Report:")
+print(classification_report(y, y_pred))
+
+cm = confusion_matrix(y, y_pred)
+print("Confusion Matrix:")
+print(cm)
+
+
+# Visualizing confusion matrix
+plt.figure(figsize=(6, 4))
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+    xticklabels=["Negative", "Positive"],
+    yticklabels=["Negative", "Positive"],
+)
+plt.xlabel("Predicted Label")
+plt.ylabel("True Label")
+plt.title("Confusion Matrix after SMOTE")
+plt.show()
+
+# Compute ROC curve and ROC AUC score
+fpr, tpr, thresholds = roc_curve(y, y_pred_proba)
+roc_auc = roc_auc_score(y, y_pred_proba)
+
+# Plot the ROC curve
+plt.figure(figsize=(10, 5))
+plt.plot(fpr, tpr, label=f"ROC curve (area = {roc_auc:.2f})")
+plt.plot([0, 1], [0, 1], "k--")  # Diagonal line for random performance
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("Receiver Operating Characteristic (ROC)")
+plt.legend(loc="lower right")
+plt.show()
+
+# Print variable importance (i.e. coefficients)
+importance = pd.DataFrame(
+    {"Feature": X.columns, "Coefficient": model.coef_[0]}
+).sort_values(by="Coefficient", key=abs, ascending=False)
+
+print("Variable Importance:")
+print(importance)
+
+# ====================================================
+# Logistic regression Hyperparamter tuning
+# ====================================================
+
+from scipy.stats import loguniform
+
+param_grid = {"C": loguniform(0.001, 100), "penalty": ["l1", "l2"]}
+
+# Initialize the logistic regression model with a solver that supports both L1 and L2 penalties
+lr = LogisticRegression(max_iter=1000, solver="liblinear")
+
+# Set up the GridSearchCV to tune hyperparameters based on ROC AUC score using 5-fold CV
+random_search = RandomizedSearchCV(lr, param_grid, cv=5, scoring="roc_auc", n_jobs=-1)
+random_search.fit(X, y)
+
+# Print the best hyperparameters and best ROC AUC score from cross-validation
+print("Best Hyperparameters:")
+print(random_search.best_params_)
+print("Best ROC AUC (CV):", random_search.best_score_)
+
+# Use the best estimator for further evaluation
+best_model = random_search.best_estimator_
+
+# Generate predictions and predicted probabilities using the best model
+y_pred = best_model.predict(X)
+y_pred_proba = best_model.predict_proba(X)[:, 1]
+
+# Print classification report and confusion matrix
+print("\nClassification Report:")
+print(classification_report(y, y_pred))
+
+cm = confusion_matrix(y, y_pred)
+print("Confusion Matrix:")
+print(cm)
+
+
+# Compute ROC curve and ROC AUC score
+fpr, tpr, thresholds = roc_curve(y, y_pred_proba)
+roc_auc = roc_auc_score(y, y_pred_proba)
+
+# Plot the ROC curve
+plt.figure(figsize=(8, 6))
+plt.plot(fpr, tpr, label=f"ROC curve (area = {roc_auc:.2f})")
+plt.plot([0, 1], [0, 1], "k--")  # Diagonal line for random performance
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("Receiver Operating Characteristic (ROC)")
+plt.legend(loc="lower right")
+plt.show()
+
+# Print variable importance (i.e., the coefficients of the logistic regression model)
+importance = pd.DataFrame(
+    {"Feature": X.columns, "Coefficient": best_model.coef_[0]}
+).sort_values(by="Coefficient", key=abs, ascending=False)
+
+print("Variable Importance:")
+print(importance)
+
+###############################################
+# Hyperparameter Tuning for -
+# LogisticRegression,
+# RandomForest,
+# SVC,
+# KNeighborsClassifier,
+# AdaBoostClassifier
+# GradientBoostingClassifier
+###############################################
+
+
+from sklearn.model_selection import RandomizedSearchCV, GridSearchCV
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import (
+    RandomForestClassifier,
+    AdaBoostClassifier,
+    GradientBoostingClassifier,
+)
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from xgboost import XGBClassifier
+import numpy as np
+
+
+# Define hyperparameter distributions for different models
+param_grids = {
+    "LogisticRegression": {
+        "C": np.logspace(-3, 3, 20),
+        "penalty": ["elasticnet"],
+        "l1_ratio": np.linspace(0, 1, 20),
+        "solver": ["saga"],
+    },
+    "RandomForest": {
+        "n_estimators": np.arange(50, 500, 50),
+        "max_depth": [None, 10, 20, 30, 40, 50],
+        "min_samples_split": [2, 5, 10],
+        "min_samples_leaf": [1, 2, 4],
+        "bootstrap": [True, False],
+    },
+    # "SVC": {
+    #     "C": np.logspace(-3, 3, 20),
+    #     "kernel": ["linear", "rbf", "poly", "sigmoid"],
+    #     "gamma": ["scale", "auto"],
+    #     "degree": np.arange(1, 5),
+    # },
+    "KNeighborsClassifier": {
+        "n_neighbors": np.arange(3, 30, 2),
+        "weights": ["uniform", "distance"],
+        "algorithm": ["auto", "ball_tree", "kd_tree", "brute"],
+        "leaf_size": np.arange(20, 100, 10),
+        "p": [1, 2],  # 1 for Manhattan distance, 2 for Euclidean distance
+    },
+    "AdaBoostClassifier": {
+        "n_estimators": np.arange(50, 500, 50),
+        "learning_rate": [0.001, 0.01, 0.1, 1],
+    },
+    "GradientBoostingClassifier": {
+        "n_estimators": np.arange(50, 500, 50),
+        "learning_rate": [0.001, 0.01, 0.1, 0.2],
+        "max_depth": [3, 5, 7, 9],
+        "subsample": [0.8, 0.9, 1.0],
+    },
+}
+
+# Define models
+models = {
+    "LogisticRegression": LogisticRegression(max_iter=100, solver="saga"),
+    "RandomForest": RandomForestClassifier(),
+    # "SVC": SVC(),
+    "KNeighborsClassifier": KNeighborsClassifier(),
+    "AdaBoostClassifier": AdaBoostClassifier(),
+    "GradientBoostingClassifier": GradientBoostingClassifier(),
+}
+
+best_params = {}
+best_logloss_scores = {}
+
+# Initialize a dictionary to store the logloss scores for each model and fold
+fold_logloss_scores = {model_name: [] for model_name in models}
+
+for model_name, model in models.items():
+    print(f"Running RandomizedSearchCV for {model_name}...")
+
+    random_search = RandomizedSearchCV(
+        model,
+        param_distributions=param_grids[model_name],
+        n_iter=10,  # Number of random combinations to try
+        cv=5,
+        scoring="neg_log_loss",  # Using negative log loss
+        n_jobs=-1,
+        random_state=42,
+        return_train_score=False,  # We don't need training scores
+    )
+
+    random_search.fit(X, y)
+
+    # Convert negative log loss to positive log loss values for clarity
+    best_params[model_name] = random_search.best_params_
+    best_logloss_scores[model_name] = -random_search.best_score_
+
+    # Convert fold scores to positive values
+    fold_logloss_scores[model_name] = -np.array(
+        random_search.cv_results_["mean_test_score"]
+    )
+
+    print(f"Best parameters for {model_name}: {random_search.best_params_}")
+    print(f"Best Logloss Score for {model_name}: {-random_search.best_score_}")
+    print("-" * 50)
+
+###############################################
+# Print final best parameters and Logloss scores for all models
+###############################################
+
+print("Best hyperparameters and Logloss scores for each model:")
+for model_name, params in best_params.items():
+    print(f"{model_name}: {params} with Logloss = {best_logloss_scores[model_name]}")
+
+###############################################
+# Plot the Logloss scores for each fold for each model
+###############################################
+
+fig, ax = plt.subplots(figsize=(15, 8))
+
+for model_name, logloss_scores in fold_logloss_scores.items():
+    ax.plot(range(1, len(logloss_scores) + 1), logloss_scores, label=model_name)
+
+ax.set_title("Logloss Scores for Each Fold (RandomizedSearchCV)")
+ax.set_xlabel("Fold Number")
+ax.set_ylabel("Logloss Score")
+ax.legend()
+fig.tight_layout()
+
+plt.show()
+
+###############################################
+# Plotting the Logloss Scores for Each Model
+###############################################
+
+# Data for plotting
+model_names = list(best_logloss_scores.keys())
+logloss_scores = list(best_logloss_scores.values())
+
+plt.figure(figsize=(10, 6))
+
+# Using a colormap to create a gradient of colors
+colors = plt.cm.tab10(np.linspace(0, 1, len(model_names)))
+
+plt.barh(model_names, logloss_scores, color=colors)
+plt.xlabel("Logloss Score")
+plt.title("Logloss Scores for Different Models")
+plt.show()
+##############################################################################################
+
+param_grid = {
+    "n_estimators": np.arange(50, 500, 50),
+    "max_depth": [None, 10, 20, 30, 40, 50],
     "min_samples_split": [2, 5, 10],
-}
-rf_grid_search = GridSearchCV(
-    RandomForestClassifier(random_state=42), rf_param_grid, cv=5, scoring="roc_auc"
-)
-rf_grid_search.fit(X_train, y_train)
-rf_model = rf_grid_search.best_estimator_
-rf_roc = roc_auc_score(y_test, rf_model.predict_proba(X_test)[:, 1])
-
-# Variable Importance for Random Forest
-rf_importance = pd.DataFrame(
-    {"Feature": X.columns, "Importance": rf_model.feature_importances_}
-).sort_values(by="Importance", ascending=False)
-
-
-# #################################################
-
-
-# #################################################
-
-
-# #################################################
-
-# Load data (assuming Final_Data is a pandas DataFrame)
-# Replace this with actual data loading code
-# Final_Data = pd.read_csv("your_data.csv")
-
-# Preprocessing
-target = "readmitted"
-X = Final_Data.drop(columns=[target])
-y = Final_Data[target].apply(lambda x: 1 if x == "Yes" else 0)
-
-# Train-test split
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
-
-# Logistic Regression
-logreg_model = LogisticRegression(max_iter=1000, solver="liblinear", random_state=42)
-logreg_model.fit(X_train, y_train)
-logreg_roc = roc_auc_score(y_test, logreg_model.predict_proba(X_test)[:, 1])
-
-# Variable Importance for Logistic Regression
-logreg_importance = np.abs(logreg_model.coef_[0])
-logreg_importance_features = pd.DataFrame(
-    {"Feature": X.columns, "Importance": logreg_importance}
-).sort_values(by="Importance", ascending=False)
-
-# Lasso Regression
-lasso_model = LassoCV(cv=10, random_state=42).fit(X_train, y_train)
-selected_features = np.where(lasso_model.coef_ != 0)[0]
-lasso_importance = pd.DataFrame(
-    {
-        "Feature": X.columns[selected_features],
-        "Importance": lasso_model.coef_[selected_features],
-    }
-).sort_values(by="Importance", ascending=False)
-
-# MARS using py-earth
-from pyearth import Earth
-
-mars_model = Earth(max_degree=2).fit(X_train, y_train)
-mars_roc = roc_auc_score(y_test, mars_model.predict(X_test))
-
-# Variable Importance for MARS
-mars_importance = pd.DataFrame(
-    {"Feature": X.columns, "Importance": mars_model.feature_importances_}
-).sort_values(by="Importance", ascending=False)
-
-# Random Forest with Grid Search
-rf_param_grid = {
-    "n_estimators": [50, 100, 150],
-    "max_depth": [None, 10, 20],
-    "min_samples_split": [2, 5, 10],
-}
-rf_grid_search = GridSearchCV(
-    RandomForestClassifier(random_state=42), rf_param_grid, cv=5, scoring="roc_auc"
-)
-rf_grid_search.fit(X_train, y_train)
-rf_model = rf_grid_search.best_estimator_
-rf_roc = roc_auc_score(y_test, rf_model.predict_proba(X_test)[:, 1])
-
-# Variable Importance for Random Forest
-rf_importance = pd.DataFrame(
-    {"Feature": X.columns, "Importance": rf_model.feature_importances_}
-).sort_values(by="Importance", ascending=False)
-
-# XGBoost with Grid Search
-xgb_param_grid = {
-    "n_estimators": [100, 150, 200],
-    "max_depth": [3, 6, 9],
-    "learning_rate": [0.01, 0.1, 0.3],
-    "subsample": [0.8, 1.0],
-    "colsample_bytree": [0.6, 0.8, 1.0],
-}
-xgb_grid_search = GridSearchCV(
-    XGBClassifier(random_state=42), xgb_param_grid, cv=5, scoring="roc_auc"
-)
-xgb_grid_search.fit(X_train, y_train)
-xgb_model = xgb_grid_search.best_estimator_
-xgb_roc = roc_auc_score(y_test, xgb_model.predict_proba(X_test)[:, 1])
-
-# Variable Importance for XGBoost
-xgb_importance = pd.DataFrame(
-    {"Feature": X.columns, "Importance": xgb_model.feature_importances_}
-).sort_values(by="Importance", ascending=False)
-
-# Neural Network
-nn_model = MLPClassifier(
-    hidden_layer_sizes=(6, 7, 8), alpha=0.8, max_iter=1000, random_state=42
-)
-nn_model.fit(X_train, y_train)
-nn_roc = roc_auc_score(y_test, nn_model.predict_proba(X_test)[:, 1])
-
-# Model Performance Comparison
-performance = {
-    "Logistic Regression": logreg_roc,
-    "Lasso": lasso_model.score(X_test, y_test),
-    "MARS": mars_roc,
-    "Random Forest": rf_roc,
-    "XGBoost": xgb_roc,
-    "Neural Network": nn_roc,
+    "min_samples_leaf": [1, 2, 4],
+    "bootstrap": [True, False],
 }
 
-print("Model Performance (ROC AUC):")
-for model, score in performance.items():
-    print(f"{model}: {score:.4f}")
+# Define the RandomForest model
+rf_model = RandomForestClassifier()
+
+print("Running RandomizedSearchCV for RandomForestClassifier...")
+
+random_search = RandomizedSearchCV(
+    rf_model,
+    param_distributions=param_grid,
+    n_iter=10,  # Number of random combinations to try
+    cv=5,
+    scoring="neg_log_loss",  # Using negative log loss
+    n_jobs=-1,
+    random_state=42,
+    return_train_score=False,
+)
+
+# Fit the RandomizedSearchCV
+random_search.fit(X, y)
+
+# Retrieve best parameters and logloss score (converted to positive values)
+best_params_rf = random_search.best_params_
+best_logloss_rf = -random_search.best_score_
+fold_logloss_scores_rf = -np.array(random_search.cv_results_["mean_test_score"])
+
+print(f"Best parameters for RandomForestClassifier: {best_params_rf}")
+print(f"Best Logloss Score for RandomForestClassifier: {best_logloss_rf}")
+print("-" * 50)
+
+###############################################
+# Plot the Logloss scores for each fold for RandomForest
+###############################################
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(
+    range(1, len(fold_logloss_scores_rf) + 1),
+    fold_logloss_scores_rf,
+    marker="o",
+    linestyle="-",
+)
+ax.set_title("RandomForest Logloss Scores for Each Fold (RandomizedSearchCV)")
+ax.set_xlabel("Fold Number")
+ax.set_ylabel("Logloss Score")
+plt.show()
+
+###############################################
+# Plotting the Best Logloss Score for RandomForest
+###############################################
+
+plt.figure(figsize=(6, 4))
+plt.barh(["RandomForest"], [best_logloss_rf])
+plt.xlabel("Logloss Score")
+plt.title("RandomForest Best Logloss Score")
+plt.show()
+
+###############################################
+#
+###############################################
+
+# Option 2: Instantiate a new RandomForestClassifier using the best parameters
+final_rf_model = RandomForestClassifier(**best_params_rf)
+final_rf_model.fit(X, y)
 
 
-# Log Loss Calculation
-def calculate_log_loss(model, X, y_true):
-    y_pred = model.predict_proba(X)[:, 1]
-    return log_loss(y_true, y_pred)
+# ====================================================
+# Loading and Preparing the TEST Dataset
+# ====================================================
 
+# Step 1: Load Data
+file_path = "/Users/vignesh/RStudio/IDA_Homework/IDA_HW_7/2024-dsa-ise-ida-classification-hw-7/hm7-Test-2024.csv"
+test = pd.read_csv(file_path)
 
-log_loss_results = {
-    "Logistic Regression": calculate_log_loss(logreg_model, X_test, y_test),
-    "Random Forest": calculate_log_loss(rf_model, X_test, y_test),
-    "XGBoost": calculate_log_loss(xgb_model, X_test, y_test),
-    "Neural Network": calculate_log_loss(nn_model, X_test, y_test),
-}
+# Convert specified columns to string (if they exist)
+cols_to_convert = [
+    "admission_type",
+    "discharge_disposition",
+    "admission_source",
+    "readmitted",
+]
+for col in cols_to_convert:
+    if col in test.columns:
+        test[col] = test[col].fillna("").astype(str)
 
-print("\nLog Loss Results:")
-for model, loss in log_loss_results.items():
-    print(f"{model}: {loss:.4f}")
+# ---------------------------
+# Process Numeric Data
+# ---------------------------
+# Select numeric columns
+test_numeric = test.select_dtypes(include=[np.number]).copy()
 
-# Variable Importance Summary
-print("\nVariable Importance:")
-print("Logistic Regression:")
-print(logreg_importance_features.head())
+# Handle outliers using the same function as in training (set values outside IQR bounds to NaN)
+test_numeric_cleaned = set_outliers_to_nan_iqr(test_numeric)
 
-print("Lasso Regression:")
-print(lasso_importance.head())
+# Drop columns that were dropped during training
+cols_to_drop = [
+    "patientID",
+    "number_inpatient",
+    "number_emergency",
+    "number_outpatient",
+]
+test_numeric_cleaned.drop(
+    columns=[col for col in cols_to_drop if col in test_numeric_cleaned.columns],
+    inplace=True,
+)
 
-print("MARS:")
-print(mars_importance.head())
+# Use the already fitted KNNImputer from training to impute missing numeric values
+test_numeric_imputed = pd.DataFrame(
+    imputer.transform(test_numeric_cleaned), columns=test_numeric_cleaned.columns
+)
 
-print("Random Forest:")
-print(rf_importance.head())
+# Apply the already fitted PowerTransformer for normalization
+test_numeric_transformed = pd.DataFrame(
+    power_transformer.transform(test_numeric_imputed),
+    columns=test_numeric_imputed.columns,
+)
 
-print("XGBoost:")
-print(xgb_importance.head())
+# Scale the numeric data using the already fitted StandardScaler
+test_numeric_scaled = pd.DataFrame(
+    scaler.transform(test_numeric_transformed), columns=test_numeric_transformed.columns
+)
+
+# ---------------------------
+# Process Factor (Categorical) Data
+# ---------------------------
+# Select categorical columns
+test_factor = test.select_dtypes(include=["object"]).copy()
+
+# Use the already fitted SimpleImputer for factor data
+test_factor_imputed = pd.DataFrame(
+    factor_imputer.transform(test_factor), columns=test_factor.columns
+)
+
+# Drop the target column if present, as we are predicting it
+if "readmitted" in test_factor_imputed.columns:
+    test_factor_imputed.drop(columns=["readmitted"], inplace=True)
+
+# For consistency with training, focus on the 'medical_specialty' variable
+if "medical_specialty" in test_factor_imputed.columns:
+    test_factor_selected = test_factor_imputed[["medical_specialty"]].copy()
+    # Use the same lumping function to collapse levels into top 19 categories
+    test_factor_selected["medical_specialty"] = lump_top_n(
+        test_factor_selected["medical_specialty"], n=19
+    )
+
+    # Convert categorical data to dummy variables matching the training encoding
+    test_factor_dummies = pd.get_dummies(
+        test_factor_selected["medical_specialty"],
+        prefix="medical_specialty",
+        drop_first=True,
+    )
+else:
+    test_factor_dummies = pd.DataFrame()
+
+# ---------------------------
+# Merge Processed Numeric and Factor Data
+# ---------------------------
+# Combine numeric and factor features
+test_final = pd.concat([test_numeric_scaled, test_factor_dummies], axis=1)
+
+# Align test feature columns with those used during training.
+# Assume X (from training) was defined as:
+#   X = Final_Data.drop(columns=["readmitted"])
+train_feature_cols = X.columns  # from training
+
+# Add any missing columns (if a category did not appear in test) with 0s
+for col in train_feature_cols:
+    if col not in test_final.columns:
+        test_final[col] = 0
+# Ensure the test data has the same column order as training
+test_final = test_final[train_feature_cols]
+
+# ---------------------------
+# Generate Predictions Using the Fitted Model
+# ---------------------------
+# Use the best tuned model (best_model) from training to predict on test data
+y_test_pred = final_rf_model.predict(test_final)
+y_test_pred_proba = final_rf_model.predict_proba(test_final)[:, 1]
+
+# Output predictions
+print("Test Predictions:")
+print(y_test_pred)
+print("\nTest Predicted Probabilities:")
+print(y_test_pred_proba)
